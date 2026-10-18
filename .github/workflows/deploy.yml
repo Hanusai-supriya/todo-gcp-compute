@@ -8,8 +8,8 @@ on:
       - main
 
 env:
-  DEPLOY_USER: rhythmsuriya
-  DEPLOY_HOST: 35.200.196.48
+  DEPLOY_USER: ubuntu
+  DEPLOY_HOST: 13.233.159.136
 
 jobs:
   deploy:
