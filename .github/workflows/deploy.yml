@@ -1,0 +1,53 @@
+# Deploy to Remote server using SSH key form Actions Secrets
+name: Deploy to Remote Server
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+env:
+  username: rhythmsuriya
+  host: 35.200.196.48
+  SSH_KEY: ${{ secrets.SSH_KEY }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Build todo app
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build
+        run: npm run build
+
+      # Deploy to remote server into apache2 directory with SSH key from Actions Secrets. First copy the files to the remote server and then move them to the apache2 directory.
+      - name: Deploy to remote server
+        uses: appleboy/ssh-action@v0.1.6
+        with:
+          host: ${{ env.host }}
+          username: ${{ env.username }}
+          key: ${{ env.SSH_KEY }}
+          script: |
+            # Create a temporary directory on the remote server
+            mkdir -p /tmp/todoapp
+
+            # Copy the build files to the temporary directory
+            scp -r ./dist/* ${{ env.username }}@${{ env.host }}:/tmp/todoapp/
+
+            # Move the files to the apache2 directory
+            sudo mv /tmp/todoapp/* /var/www/html/
+
+            # Clean up the temporary directory
+            rm -rf /tmp/todoapp
