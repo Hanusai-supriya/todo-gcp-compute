@@ -1,11 +1,15 @@
-# Deploy to Remote server using SSH key form Actions Secrets
-name: Deploy to Remote Server
+
+# CI/CD: Test, build, and deploy Todo app
+name: Todo App CI/CD
 
 on:
   workflow_dispatch:
   push:
     branches:
       - main
+
+permissions:
+  contents: read
 
 env:
   DEPLOY_USER: ubuntu
@@ -19,17 +23,25 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Build todo app
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '22'
           cache: npm
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build
+      - name: Run automated tests
+        run: npm run test -- --run
+
+      - name: Type check
+        run: npm run test:typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build application
         run: npm run build
 
       - name: Configure SSH
@@ -45,10 +57,25 @@ jobs:
           chmod 600 ~/.ssh/known_hosts
 
       - name: Create remote staging directory
-        run: ssh "$DEPLOY_USER@$DEPLOY_HOST" 'mkdir -p /tmp/todoapp'
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            'mkdir -p /tmp/todoapp'
 
       - name: Copy build files to server
-        run: scp -r dist/. "$DEPLOY_USER@$DEPLOY_HOST:/tmp/todoapp/"
+        run: |
+          scp -r dist/. \
+            "$DEPLOY_USER@$DEPLOY_HOST:/tmp/todoapp/"
 
       - name: Publish build
-        run: ssh "$DEPLOY_USER@$DEPLOY_HOST" 'sudo mv /tmp/todoapp/* /var/www/html/ && rm -rf /tmp/todoapp'
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            'sudo mkdir -p /var/www/html &&
+             sudo cp -a /tmp/todoapp/. /var/www/html/ &&
+             rm -rf /tmp/todoapp'
+
+      - name: Smoke test deployed application
+        run: |
+          curl --fail --show-error --silent \
+            --retry 5 --retry-delay 3 \
+            --retry-connrefused \
+            http://13.233.159.136/
