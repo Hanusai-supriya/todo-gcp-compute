@@ -8,9 +8,8 @@ on:
       - main
 
 env:
-  username: rhythmsuriya
-  host: 35.200.196.48
-  SSH_KEY: ${{ secrets.SSH_KEY }}
+  DEPLOY_USER: rhythmsuriya
+  DEPLOY_HOST: 35.200.196.48
 
 jobs:
   deploy:
@@ -18,36 +17,38 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       # Build todo app
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '18'
+          cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build
         run: npm run build
 
-      # Deploy to remote server into apache2 directory with SSH key from Actions Secrets. First copy the files to the remote server and then move them to the apache2 directory.
-      - name: Deploy to remote server
-        uses: appleboy/ssh-action@v0.1.6
+      - name: Configure SSH
+        uses: webfactory/ssh-agent@v0.9.0
         with:
-          host: ${{ env.host }}
-          username: ${{ env.username }}
-          key: ${{ env.SSH_KEY }}
-          script: |
-            # Create a temporary directory on the remote server
-            mkdir -p /tmp/todoapp
+          ssh-private-key: ${{ secrets.SSH_KEY }}
 
-            # Copy the build files to the temporary directory
-            scp -r ./dist/* ${{ env.username }}@${{ env.host }}:/tmp/todoapp/
+      - name: Add server to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
 
-            # Move the files to the apache2 directory
-            sudo mv /tmp/todoapp/* /var/www/html/
+      - name: Create remote staging directory
+        run: ssh "$DEPLOY_USER@$DEPLOY_HOST" 'mkdir -p /tmp/todoapp'
 
-            # Clean up the temporary directory
-            rm -rf /tmp/todoapp
+      - name: Copy build files to server
+        run: scp -r dist/. "$DEPLOY_USER@$DEPLOY_HOST:/tmp/todoapp/"
+
+      - name: Publish build
+        run: ssh "$DEPLOY_USER@$DEPLOY_HOST" 'sudo mv /tmp/todoapp/* /var/www/html/ && rm -rf /tmp/todoapp'
