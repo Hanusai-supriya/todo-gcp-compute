@@ -1,0 +1,36 @@
+### Project: Automated CI/CD Pipeline for a React Todo Application Using GitHub Actions and AWS EC2
+
+**Project objective**
+
+The objective of this project was to automate the testing, building, and deployment of a React-based Todo application to an Ubuntu EC2 instance using GitHub Actions.
+
+**Tools and technologies**
+
+- Git and GitHub for source code management
+- GitHub Actions for CI/CD automation
+- Node.js and npm for dependency management
+- Vitest for unit testing
+- TypeScript for type checking
+- ESLint for code quality checks
+- Vite for creating the production build
+- AWS EC2 with Ubuntu for hosting
+- SSH and SCP for secure server access and file transfer
+- HTTP and curl for a basic deployment smoke test
+
+**Project workflow**
+
+First, I stored the application source code in a GitHub repository. I configured a GitHub Actions workflow to trigger when code was pushed to the main branch, with an additional option to trigger it manually.
+
+GitHub Actions starts a hosted Ubuntu runner. The runner checks out the repository and sets up the required Node.js version. It installs the project's dependencies using `npm ci`.
+
+Next, the workflow runs the existing automated tests, TypeScript type checking, and ESLint checks. If these checks succeed, it builds the production version of the application using `npm run build`, which generates the deployable files in the `dist` directory.
+
+For deployment, I configured SSH authentication using a private key stored in GitHub Actions Secrets. The workflow connects to the Ubuntu EC2 instance, creates a temporary staging directory, and transfers the production build files using SCP.
+
+The workflow then copies the files into `/var/www/html`, which is configured as the web root on the server. Finally, it runs a curl-based smoke test to verify that the website responds over HTTP.
+
+**My learning and outcome**
+
+This project helped me understand how CI and CD work together, how to automate application validation, how to manage deployment credentials using GitHub Secrets, and how to deploy a frontend application to an EC2 server over SSH.
+
+It also helped me understand the importance of failing a pipeline before deployment when automated quality checks do not pass.
