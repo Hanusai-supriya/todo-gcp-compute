@@ -1,22 +1,25 @@
 
-# CI/CD: Test, build, and deploy Todo app
-name: Todo App CI/CD
+name: Todo App CI
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
 
 permissions:
   contents: read
 
-env:
-  DEPLOY_USER: ubuntu
-  DEPLOY_HOST: 13.233.159.136
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  deploy:
+  ci:
+    name: Continuous Integration
     runs-on: ubuntu-latest
 
     steps:
@@ -32,50 +35,22 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run automated tests
-        run: npm run test -- --run
+      - name: Run lint checks
+        run: npm run lint
 
-      - name: Type check
+      - name: Check TypeScript types
         run: npm run test:typecheck
 
-      - name: Lint
-        run: npm run lint
+      - name: Run unit tests
+        run: npm test -- --run
 
       - name: Build application
         run: npm run build
 
-      - name: Configure SSH
-        uses: webfactory/ssh-agent@v0.9.0
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
         with:
-          ssh-private-key: ${{ secrets.SSH_KEY }}
-
-      - name: Add server to known hosts
-        run: |
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
-
-      - name: Create remote staging directory
-        run: |
-          ssh "$DEPLOY_USER@$DEPLOY_HOST" \
-            'mkdir -p /tmp/todoapp'
-
-      - name: Copy build files to server
-        run: |
-          scp -r dist/. \
-            "$DEPLOY_USER@$DEPLOY_HOST:/tmp/todoapp/"
-
-      - name: Publish build
-        run: |
-          ssh "$DEPLOY_USER@$DEPLOY_HOST" \
-            'sudo mkdir -p /var/www/html &&
-             sudo cp -a /tmp/todoapp/. /var/www/html/ &&
-             rm -rf /tmp/todoapp'
-
-      - name: Smoke test deployed application
-        run: |
-          curl --fail --show-error --silent \
-            --retry 5 --retry-delay 3 \
-            --retry-connrefused \
-            http://13.233.159.136/
+          name: todo-app-build-${{ github.sha }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 3
