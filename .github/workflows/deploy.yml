@@ -82,7 +82,7 @@ jobs:
       - name: Upload build to S3
         env:
           DEPLOY_BUCKET: ${{ vars.DEPLOY_BUCKET }}
-          BUILD_PREFIX: builds/${{ github.sha }}
+          BUILD_PREFIX: releases/builds/${{ github.sha }}
         run: aws s3 sync dist/ "s3://${DEPLOY_BUCKET}/${BUILD_PREFIX}/" --no-progress
 
       - name: Deploy build to EC2 through SSM
