@@ -89,7 +89,7 @@ jobs:
         env:
           EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
           DEPLOY_BUCKET: ${{ vars.DEPLOY_BUCKET }}
-          BUILD_PREFIX: builds/${{ github.sha }}
+          BUILD_PREFIX: releases/builds/${{ github.sha }}
           DEPLOY_DIRECTORY: /var/www/html
         run: |
           set -euo pipefail
