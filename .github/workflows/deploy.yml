@@ -79,6 +79,13 @@ jobs:
           aws-region: ${{ vars.AWS_REGION }}
           role-session-name: GitHubActions-${{ github.run_id }}
 
+      - name: Verify AWS identity and S3 access
+        run: |
+           aws sts get-caller-identity
+           aws s3api list-objects-v2 \
+           --bucket hanusai-todo-deploy-733437130033 \
+           --max-keys 1
+
       - name: Upload build to S3
         env:
           DEPLOY_BUCKET: ${{ vars.DEPLOY_BUCKET }}
