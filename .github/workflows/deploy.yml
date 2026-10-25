@@ -1,5 +1,5 @@
 
-name: Todo App CI
+name: Todo App CI/CD
 
 on:
   push:
@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -31,10 +32,10 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-
+         
       - name: Install dependencies
         run: npm ci
-
+  
       - name: Run lint checks
         run: npm run lint
 
@@ -80,25 +81,25 @@ jobs:
 
       - name: Upload build to S3
         env:
-          S3_BUCKET_NAME: ${{ vars.S3_BUCKET_NAME }}
+          DEPLOY_BUCKET: ${{ vars.DEPLOY_BUCKET }}
           BUILD_PREFIX: builds/${{ github.sha }}
-        run: aws s3 sync dist/ "s3://${S3_BUCKET_NAME}/${BUILD_PREFIX}/" --no-progress
+        run: aws s3 sync dist/ "s3://${DEPLOY_BUCKET}/${BUILD_PREFIX}/" --no-progress
 
       - name: Deploy build to EC2 through SSM
         env:
           EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
-          S3_BUCKET_NAME: ${{ vars.S3_BUCKET_NAME }}
+          DEPLOY_BUCKET: ${{ vars.DEPLOY_BUCKET }}
           BUILD_PREFIX: builds/${{ github.sha }}
           DEPLOY_DIRECTORY: /var/www/html
         run: |
           set -euo pipefail
 
-          if [[ ! "$S3_BUCKET_NAME" =~ ^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$ ]]; then
-            echo "::error::S3_BUCKET_NAME must be a valid S3 bucket name."
+          if [[ ! "$DEPLOY_BUCKET" =~ ^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$ ]]; then
+            echo "::error::DEPLOY_BUCKET must be a valid S3 bucket name."
             exit 1
           fi
 
-          deploy_command="aws s3 sync 's3://${S3_BUCKET_NAME}/${BUILD_PREFIX}/' '${DEPLOY_DIRECTORY}/' --delete"
+          deploy_command="aws s3 sync 's3://${DEPLOY_BUCKET}/${BUILD_PREFIX}/' '${DEPLOY_DIRECTORY}/' --delete"
           parameters=$(jq -n --arg command "$deploy_command" '{commands: [$command]}')
 
           command_id=$(aws ssm send-command \
