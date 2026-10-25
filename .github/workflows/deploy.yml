@@ -54,3 +54,74 @@ jobs:
           path: dist/
           if-no-files-found: error
           retention-days: 3
+
+  cd:
+    needs: ci
+    name: Deploy to AWS EC2
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: todo-app-build-${{ github.sha }}
+          path: dist
+
+      - name: Connect to AWS OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: GitHubActions-${{ github.run_id }}
+
+      - name: Upload build to S3
+        env:
+          S3_BUCKET_NAME: ${{ vars.S3_BUCKET_NAME }}
+          BUILD_PREFIX: builds/${{ github.sha }}
+        run: aws s3 sync dist/ "s3://${S3_BUCKET_NAME}/${BUILD_PREFIX}/" --no-progress
+
+      - name: Deploy build to EC2 through SSM
+        env:
+          EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+          S3_BUCKET_NAME: ${{ vars.S3_BUCKET_NAME }}
+          BUILD_PREFIX: builds/${{ github.sha }}
+          DEPLOY_DIRECTORY: /var/www/html
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$S3_BUCKET_NAME" =~ ^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$ ]]; then
+            echo "::error::S3_BUCKET_NAME must be a valid S3 bucket name."
+            exit 1
+          fi
+
+          deploy_command="aws s3 sync 's3://${S3_BUCKET_NAME}/${BUILD_PREFIX}/' '${DEPLOY_DIRECTORY}/' --delete"
+          parameters=$(jq -n --arg command "$deploy_command" '{commands: [$command]}')
+
+          command_id=$(aws ssm send-command \
+            --instance-ids "$EC2_INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --parameters "$parameters" \
+            --query 'Command.CommandId' \
+            --output text)
+          echo "SSM command ID: $command_id"
+
+          if ! aws ssm wait command-executed \
+            --command-id "$command_id" \
+            --instance-id "$EC2_INSTANCE_ID"; then
+            aws ssm get-command-invocation \
+              --command-id "$command_id" \
+              --instance-id "$EC2_INSTANCE_ID" \
+              --query '{Status:Status, StatusDetails:StatusDetails, StandardOutputContent:StandardOutputContent, StandardErrorContent:StandardErrorContent}' \
+              --output json
+            exit 1
+          fi
+
+          aws ssm get-command-invocation \
+            --command-id "$command_id" \
+            --instance-id "$EC2_INSTANCE_ID" \
+            --query StandardOutputContent \
+            --output text
